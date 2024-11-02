@@ -85,6 +85,19 @@ A faster interval means a much more accurate time monitoring, but a much higher 
 
 4. Power up the system and set the initial time through the RTC.
 
+**If you wish to modify the UI, please download Nextion Editor and open the included .HMI file.**
+Don't change the ID of the following elements:
+
+**Time Display for Schedule:**  ```timeIndicator1, timeIndicator2, timeIndicator3, timeIndicator4```
+
+**Dispense Buttons:**  ```manual1, manual2, manual3, manual4```
+
+**Humidity Display:**  ```humid```
+
+**Time Display Indicator:** ```datecator```
+
+**Medicine Count:** ```mA1, mA2, mA3, mA4```
+
 ## Usage 📱
 
 1. **Adding Medicine**:
