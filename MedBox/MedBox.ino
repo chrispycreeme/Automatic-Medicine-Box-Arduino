@@ -14,8 +14,10 @@ struct Schedule
     uint8_t hour;
     uint8_t minute;
     uint8_t containerNum;
+    uint8_t frequency;
     bool enabled;
     bool dispensed;
+    uint8_t dailyCount;
 };
 
 DHT dht11(DHT11_PIN, DHT11);
@@ -45,129 +47,190 @@ bool prevIrState3 = false;
 bool prevIrState4 = false;
 
 Schedule schedules[MAX_SCHEDULES] = {
-    {8, 0, 1, true, false},
-    {12, 0, 2, true, false},
-    {16, 0, 3, true, false},
-    {20, 0, 4, true, false} 
+    {8, 0, 1, 1, false, false, 0}, // Container 1
+    {8, 0, 2, 1, false, false, 0}, // Container 2
+    {8, 0, 3, 1, false, false, 0}, // Container 3
+    {8, 0, 4, 1, false, false, 0}  // Container 4
 };
 
-void formatTimeAMPM(char* timeStr, uint8_t hour, uint8_t minute, uint8_t second = 255) {
-    const char* period = (hour >= 12) ? "PM" : "AM";
-    uint8_t displayHour = hour % 12;
-    if (displayHour == 0) displayHour = 12;
-    
-    if (second != 255) {
-        sprintf(timeStr, "%02d:%02d:%02d %s", displayHour, minute, second, period);
-    } else {
-        sprintf(timeStr, "%02d:%02d %s", displayHour, minute, period);
-    }
-}
-
-void trigger5(){  // Button A
-    int hour = myNex.readNumber("hourSlider.val");
-    int minute = myNex.readNumber("minuteSlider.val");
-    
-    schedules[0].hour = hour;
-    schedules[0].minute = minute;
-    schedules[0].containerNum = 1;
-    schedules[0].dispensed = false;
-    
-    char timeText[15];
-    formatTimeAMPM(timeText, hour, minute);
-    myNex.writeStr("timeIndicator1.txt", timeText);
-}
-
-void trigger6(){  // Button B
-    int hour = myNex.readNumber("hourSlider.val");
-    int minute = myNex.readNumber("minuteSlider.val");
-    
-    schedules[1].hour = hour;
-    schedules[1].minute = minute;
-    schedules[1].containerNum = 2;
-    schedules[1].dispensed = false;
-    
-    char timeText[15];
-    formatTimeAMPM(timeText, hour, minute);
-    myNex.writeStr("timeIndicator2.txt", timeText);
-}
-
-void trigger7(){  // Button C
-    int hour = myNex.readNumber("hourSlider.val");
-    int minute = myNex.readNumber("minuteSlider.val");
-    
-    schedules[2].hour = hour;
-    schedules[2].minute = minute;
-    schedules[2].containerNum = 3;
-    schedules[2].dispensed = false;
-    
-    char timeText[15];
-    formatTimeAMPM(timeText, hour, minute);
-    myNex.writeStr("timeIndicator3.txt", timeText);
-}
-
-void trigger8(){  // Button D
-    int hour = myNex.readNumber("hourSlider.val");
-    int minute = myNex.readNumber("minuteSlider.val");
-    
-    schedules[3].hour = hour;
-    schedules[3].minute = minute;
-    schedules[3].containerNum = 4;
-    schedules[3].dispensed = false;
-    
-    char timeText[15];
-    formatTimeAMPM(timeText, hour, minute);
-    myNex.writeStr("timeIndicator4.txt", timeText);
-}
-
-
-void setup()
+void calculateNextDispenseTime(int containerIndex)
 {
-    Serial.begin(115200);
-    Serial2.begin(9600);
-    myNex.begin(9600);
+    RtcDateTime now = Rtc.GetDateTime();
+    Schedule &schedule = schedules[containerIndex];
 
-    dht11.begin();
+    if (schedule.frequency == 1)
+    {                      
+        schedule.hour = 8;
+    }
+    else if (schedule.frequency == 2)
+    {
+        if (schedule.dailyCount == 0)
+        {
+            schedule.hour = 8;
+        }
+        else
+        {
+            schedule.hour = 20;
+        }
+    }
+    else if (schedule.frequency == 3)
+    {
+        if (schedule.dailyCount == 0)
+        {
+            schedule.hour = 8;
+        }
+        else if (schedule.dailyCount == 1)
+        {
+            schedule.hour = 14;
+        }
+        else
+        {
+            schedule.hour = 20;
+        }
+    }
 
-    servoA.attach(13);
-    servoB.attach(12);
-    servoC.attach(11);
-    servoD.attach(10);
+    schedule.minute = 0;
+    schedule.dispensed = false;
+}
 
-    servoA.write(0);
-    servoB.write(0);
-    servoC.write(0);
-    servoD.write(0);
+void trigger5()
+{
+    int checkBox1 = myNex.readNumber("c0.val");
+    int checkBox2 = myNex.readNumber("c1.val");
+    int checkBox3 = myNex.readNumber("c2.val");
+    int checkBox4 = myNex.readNumber("c3.val");
 
-    pinMode(irSensor1, INPUT);
-    pinMode(irSensor2, INPUT);
-    pinMode(irSensor3, INPUT);
-    pinMode(irSensor4, INPUT);
+    if (checkBox1)
+        schedules[0].frequency = 1; 
+    else if (checkBox2)
+        schedules[0].frequency = 1; 
+    else if (checkBox3)
+        schedules[0].frequency = 2;
+    else if (checkBox4)
+        schedules[0].frequency = 3;
 
-    initializeRTC();
-
-    delay(1000);
-
-    myNex.writeNum("mA1.val", medicineCount1);
-    myNex.writeNum("mA2.val", medicineCount2);
-    myNex.writeNum("mA3.val", medicineCount3);
-    myNex.writeNum("mA4.val", medicineCount4);
-    myNex.writeNum("manual1.val", 0);
-    myNex.writeNum("manual2.val", 0);
-    myNex.writeNum("manual3.val", 0);
-    myNex.writeNum("manual4.val", 0);
-
+    schedules[0].enabled = true;
+    schedules[0].dailyCount = 0;
+    calculateNextDispenseTime(0);
     updateTimeIndicators();
+    updateNextMedicine();
+}
 
-    delay(1000);
+void trigger6()
+{
+    int checkBox1 = myNex.readNumber("c0.val");
+    int checkBox2 = myNex.readNumber("c1.val");
+    int checkBox3 = myNex.readNumber("c2.val");
+    int checkBox4 = myNex.readNumber("c3.val");
+
+    if (checkBox1)
+        schedules[1].frequency = 1;
+    else if (checkBox2)
+        schedules[1].frequency = 1;
+    else if (checkBox3)
+        schedules[1].frequency = 2;
+    else if (checkBox4)
+        schedules[1].frequency = 3;
+
+    schedules[1].enabled = true;
+    schedules[1].dailyCount = 0;
+    calculateNextDispenseTime(1);
+    updateTimeIndicators();
+    updateNextMedicine();
+}
+
+void trigger7()
+{
+    int checkBox1 = myNex.readNumber("c0.val");
+    int checkBox2 = myNex.readNumber("c1.val");
+    int checkBox3 = myNex.readNumber("c2.val");
+    int checkBox4 = myNex.readNumber("c3.val");
+
+    if (checkBox1)
+        schedules[2].frequency = 1;
+    else if (checkBox2)
+        schedules[2].frequency = 1;
+    else if (checkBox3)
+        schedules[2].frequency = 2;
+    else if (checkBox4)
+        schedules[2].frequency = 3;
+
+    schedules[2].enabled = true;
+    schedules[2].dailyCount = 0;
+    calculateNextDispenseTime(2);
+    updateTimeIndicators();
+    updateNextMedicine();
+}
+
+void trigger8()
+{
+    int checkBox1 = myNex.readNumber("c0.val");
+    int checkBox2 = myNex.readNumber("c1.val");
+    int checkBox3 = myNex.readNumber("c2.val");
+    int checkBox4 = myNex.readNumber("c3.val");
+
+    if (checkBox1)
+        schedules[3].frequency = 1;
+    else if (checkBox2)
+        schedules[3].frequency = 1;
+    else if (checkBox3)
+        schedules[3].frequency = 2;
+    else if (checkBox4)
+        schedules[3].frequency = 3;
+
+    schedules[3].enabled = true;
+    schedules[3].dailyCount = 0;
+    calculateNextDispenseTime(3);
+    updateTimeIndicators();
+    updateNextMedicine();
+}
+
+void checkSchedules()
+{
+    RtcDateTime now = Rtc.GetDateTime();
+    static uint8_t lastDay = 0;
+
+    if (now.Day() != lastDay)
+    {
+        for (int i = 0; i < MAX_SCHEDULES; i++)
+        {
+            if (schedules[i].enabled)
+            {
+                schedules[i].dailyCount = 0;
+                calculateNextDispenseTime(i);
+            }
+        }
+        lastDay = now.Day();
+        updateTimeIndicators();
+        updateNextMedicine();
+    }
 
     for (int i = 0; i < MAX_SCHEDULES; i++)
     {
-        char timeText[15];
-        char indicatorName[20];
-        formatTimeAMPM(timeText, schedules[i].hour, schedules[i].minute);
-        sprintf(indicatorName, "timeIndicator%d.txt", i + 1);
-        myNex.writeStr(indicatorName, timeText);
-        delay(100);
+        Schedule &schedule = schedules[i];
+
+        if (schedule.enabled && !schedule.dispensed &&
+            now.Hour() == schedule.hour &&
+            now.Minute() == schedule.minute)
+        {
+
+            int *medicineCount = getMedicineCount(schedule.containerNum);
+            if (medicineCount != nullptr && *medicineCount > 0)
+            {
+                dispenseFromContainer(schedule.containerNum);
+                schedule.dispensed = true;
+                schedule.dailyCount++;
+
+                if ((schedule.frequency == 2 && schedule.dailyCount < 2) ||
+                    (schedule.frequency == 3 && schedule.dailyCount < 3))
+                {
+                    calculateNextDispenseTime(i);
+                }
+
+                updateTimeIndicators();
+                updateNextMedicine();
+            }
+        }
     }
 }
 
@@ -175,27 +238,33 @@ void updateTimeIndicators()
 {
     for (int i = 0; i < MAX_SCHEDULES; i++)
     {
+        char timeText[30];
         char indicatorName[20];
-        char timeText[15];
+        sprintf(indicatorName, "timeIndicator%d.txt", i + 1);
 
-        for (int j = 0; j < MAX_SCHEDULES; j++)
+        if (schedules[i].enabled)
         {
-            if (schedules[j].containerNum == (i + 1))
-            {
-                sprintf(indicatorName, "timeIndicator%d", i + 1);
+            char timeStr[15];
+            formatTimeAMPM(timeStr, schedules[i].hour, schedules[i].minute);
 
-                if (schedules[j].dispensed)
-                {
-                    myNex.writeStr(indicatorName, "Dispensed");
-                }
-                else
-                {
-                    formatTimeAMPM(timeText, schedules[j].hour, schedules[j].minute);
-                    myNex.writeStr(indicatorName, timeText);
-                }
-                break;
+            if (schedules[i].dispensed &&
+                ((schedules[i].frequency == 1) ||
+                 (schedules[i].frequency == 2 && schedules[i].dailyCount >= 2) ||
+                 (schedules[i].frequency == 3 && schedules[i].dailyCount >= 3)))
+            {
+                strcpy(timeText, "Completed for today");
+            }
+            else
+            {
+                sprintf(timeText, "Next: %s", timeStr);
             }
         }
+        else
+        {
+            strcpy(timeText, "Not scheduled");
+        }
+
+        myNex.writeStr(indicatorName, timeText);
     }
 }
 
@@ -430,7 +499,6 @@ void updateSensorData()
     formatTimeAMPM(timeStr, now.Hour(), now.Minute(), now.Second());
     myNex.writeStr("datecator.txt", timeStr);
 }
-
 
 void initializeRTC()
 {
