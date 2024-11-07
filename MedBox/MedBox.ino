@@ -63,7 +63,7 @@ void formatTimeAMPM(char* timeStr, uint8_t hour, uint8_t minute, uint8_t second 
     }
 }
 
-void trigger0() {  // Nextion sends signal when changeScdA is pressed
+void trigger5(){  // Button A
     int hour = myNex.readNumber("hourSlider.val");
     int minute = myNex.readNumber("minuteSlider.val");
     
@@ -77,7 +77,7 @@ void trigger0() {  // Nextion sends signal when changeScdA is pressed
     myNex.writeStr("timeIndicator1.txt", timeText);
 }
 
-void trigger1() {  // changeScdB
+void trigger6(){  // Button B
     int hour = myNex.readNumber("hourSlider.val");
     int minute = myNex.readNumber("minuteSlider.val");
     
@@ -91,7 +91,7 @@ void trigger1() {  // changeScdB
     myNex.writeStr("timeIndicator2.txt", timeText);
 }
 
-void trigger2() {  // changeScdC
+void trigger7(){  // Button C
     int hour = myNex.readNumber("hourSlider.val");
     int minute = myNex.readNumber("minuteSlider.val");
     
@@ -105,7 +105,7 @@ void trigger2() {  // changeScdC
     myNex.writeStr("timeIndicator3.txt", timeText);
 }
 
-void trigger3() {  // changeScdD
+void trigger8(){  // Button D
     int hour = myNex.readNumber("hourSlider.val");
     int minute = myNex.readNumber("minuteSlider.val");
     
@@ -157,11 +157,6 @@ void setup()
     myNex.writeNum("manual4.val", 0);
 
     updateTimeIndicators();
-
-    myNex.attachPush("changeScdA", trigger0);
-    myNex.attachPush("changeScdB", trigger1);
-    myNex.attachPush("changeScdC", trigger2);
-    myNex.attachPush("changeScdD", trigger3);
 
     delay(1000);
 
