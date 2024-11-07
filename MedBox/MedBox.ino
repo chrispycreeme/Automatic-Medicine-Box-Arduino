@@ -63,6 +63,62 @@ void formatTimeAMPM(char* timeStr, uint8_t hour, uint8_t minute, uint8_t second 
     }
 }
 
+void trigger0() {  // Nextion sends signal when changeScdA is pressed
+    int hour = myNex.readNumber("hourSlider.val");
+    int minute = myNex.readNumber("minuteSlider.val");
+    
+    schedules[0].hour = hour;
+    schedules[0].minute = minute;
+    schedules[0].containerNum = 1;
+    schedules[0].dispensed = false;
+    
+    char timeText[15];
+    formatTimeAMPM(timeText, hour, minute);
+    myNex.writeStr("timeIndicator1.txt", timeText);
+}
+
+void trigger1() {  // changeScdB
+    int hour = myNex.readNumber("hourSlider.val");
+    int minute = myNex.readNumber("minuteSlider.val");
+    
+    schedules[1].hour = hour;
+    schedules[1].minute = minute;
+    schedules[1].containerNum = 2;
+    schedules[1].dispensed = false;
+    
+    char timeText[15];
+    formatTimeAMPM(timeText, hour, minute);
+    myNex.writeStr("timeIndicator2.txt", timeText);
+}
+
+void trigger2() {  // changeScdC
+    int hour = myNex.readNumber("hourSlider.val");
+    int minute = myNex.readNumber("minuteSlider.val");
+    
+    schedules[2].hour = hour;
+    schedules[2].minute = minute;
+    schedules[2].containerNum = 3;
+    schedules[2].dispensed = false;
+    
+    char timeText[15];
+    formatTimeAMPM(timeText, hour, minute);
+    myNex.writeStr("timeIndicator3.txt", timeText);
+}
+
+void trigger3() {  // changeScdD
+    int hour = myNex.readNumber("hourSlider.val");
+    int minute = myNex.readNumber("minuteSlider.val");
+    
+    schedules[3].hour = hour;
+    schedules[3].minute = minute;
+    schedules[3].containerNum = 4;
+    schedules[3].dispensed = false;
+    
+    char timeText[15];
+    formatTimeAMPM(timeText, hour, minute);
+    myNex.writeStr("timeIndicator4.txt", timeText);
+}
+
 
 void setup()
 {
@@ -101,6 +157,11 @@ void setup()
     myNex.writeNum("manual4.val", 0);
 
     updateTimeIndicators();
+
+    myNex.attachPush("changeScdA", trigger0);
+    myNex.attachPush("changeScdB", trigger1);
+    myNex.attachPush("changeScdC", trigger2);
+    myNex.attachPush("changeScdD", trigger3);
 
     delay(1000);
 
