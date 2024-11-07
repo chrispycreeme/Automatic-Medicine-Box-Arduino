@@ -21,7 +21,6 @@ struct Schedule
     uint8_t dailyCount;
 };
 
-// Forward declarations of global variables that are used in functions
 extern RtcDS1302<ThreeWire> Rtc;
 extern EasyNex myNex;
 extern Schedule schedules[MAX_SCHEDULES];
