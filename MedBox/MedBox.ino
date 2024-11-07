@@ -3,6 +3,7 @@
 #include <ThreeWire.h>
 #include <RtcDS1302.h>
 #include "EasyNextionLibrary.h"
+#include <limits.h>  // For ULONG_MAX
 
 #define DHT11_PIN 6
 #define NEXTION_REFRESH_INTERVAL 100
@@ -19,6 +20,11 @@ struct Schedule
     bool dispensed;
     uint8_t dailyCount;
 };
+
+// Forward declarations of global variables that are used in functions
+extern RtcDS1302<ThreeWire> Rtc;
+extern EasyNex myNex;
+extern Schedule schedules[MAX_SCHEDULES];
 
 DHT dht11(DHT11_PIN, DHT11);
 ThreeWire myWire(4, 5, 2);
@@ -53,13 +59,52 @@ Schedule schedules[MAX_SCHEDULES] = {
     {8, 0, 4, 1, false, false, 0}  // Container 4
 };
 
+void formatTimeAMPM(char *timeStr, uint8_t hours, uint8_t minutes, uint8_t seconds = 0) {
+    const char *period = hours >= 12 ? "PM" : "AM";
+    uint8_t displayHours = hours > 12 ? hours - 12 : (hours == 0 ? 12 : hours);
+    
+    if (seconds > 0) {
+        sprintf(timeStr, "%02d:%02d:%02d %s", displayHours, minutes, seconds, period);
+    } else {
+        sprintf(timeStr, "%02d:%02d %s", displayHours, minutes, period);
+    }
+}
+
+void updateNextMedicine() {
+    RtcDateTime now = Rtc.GetDateTime();
+    unsigned long nextDispenseTime = ~0UL;  // Maximum unsigned long value
+    int nextContainer = -1;
+
+    for (int i = 0; i < MAX_SCHEDULES; i++) {
+        if (schedules[i].enabled && !schedules[i].dispensed) {
+            unsigned long scheduleTime = schedules[i].hour * 3600UL + schedules[i].minute * 60UL;
+            unsigned long currentTime = now.Hour() * 3600UL + now.Minute() * 60UL;
+            
+            if (scheduleTime > currentTime && scheduleTime < nextDispenseTime) {
+                nextDispenseTime = scheduleTime;
+                nextContainer = i + 1;
+            }
+        }
+    }
+
+    if (nextContainer != -1) {
+        char timeStr[15];
+        formatTimeAMPM(timeStr, schedules[nextContainer-1].hour, schedules[nextContainer-1].minute);
+        char nextMedText[30];
+        sprintf(nextMedText, "Next: Container %d at %s", nextContainer, timeStr);
+        myNex.writeStr("nextMedicine.txt", nextMedText);
+    } else {
+        myNex.writeStr("nextMedicine.txt", "No upcoming doses");
+    }
+}
+
 void calculateNextDispenseTime(int containerIndex)
 {
     RtcDateTime now = Rtc.GetDateTime();
     Schedule &schedule = schedules[containerIndex];
 
     if (schedule.frequency == 1)
-    {                      
+    {
         schedule.hour = 8;
     }
     else if (schedule.frequency == 2)
@@ -101,9 +146,9 @@ void trigger5()
     int checkBox4 = myNex.readNumber("c3.val");
 
     if (checkBox1)
-        schedules[0].frequency = 1; 
+        schedules[0].frequency = 1;
     else if (checkBox2)
-        schedules[0].frequency = 1; 
+        schedules[0].frequency = 1;
     else if (checkBox3)
         schedules[0].frequency = 2;
     else if (checkBox4)
@@ -268,6 +313,56 @@ void updateTimeIndicators()
     }
 }
 
+void refreshNextionDisplay() {
+    
+    if (medicineCount1 >= 0) myNex.writeNum("mA1.val", medicineCount1);
+    if (medicineCount2 >= 0) myNex.writeNum("mA2.val", medicineCount2);
+    if (medicineCount3 >= 0) myNex.writeNum("mA3.val", medicineCount3);
+    if (medicineCount4 >= 0) myNex.writeNum("mA4.val", medicineCount4);
+
+    myNex.writeNum("manual1.val", 0);
+    myNex.writeNum("manual2.val", 0);
+    myNex.writeNum("manual3.val", 0);
+    myNex.writeNum("manual4.val", 0);
+
+    updateTimeIndicators();
+    updateNextMedicine();
+
+    updateSensorData();
+}
+
+void setup() {
+
+    Serial.begin(115200);
+
+    Serial2.begin(9600);
+    myNex.begin(Serial2);
+
+    dht11.begin();
+
+    servoA.attach(13);
+    servoB.attach(9);
+    servoC.attach(11);
+    servoD.attach(10);
+
+    initializeRTC();
+
+    pinMode(irSensor1, INPUT);
+    pinMode(irSensor2, INPUT);
+    pinMode(irSensor3, INPUT);
+    pinMode(irSensor4, INPUT);
+
+    medicineCount1 = 0;
+    medicineCount2 = 0;
+    medicineCount3 = 0;
+    medicineCount4 = 0;
+
+    refreshNextionDisplay();
+
+    updateTimeIndicators();
+    updateNextMedicine();
+}
+
 void loop()
 {
     unsigned long currentTime = millis();
@@ -288,49 +383,6 @@ void loop()
     }
 
     checkIRSensors();
-}
-
-void checkSchedules()
-{
-    RtcDateTime now = Rtc.GetDateTime();
-    static uint8_t lastDay = 0;
-
-    if (now.Day() != lastDay)
-    {
-        for (int i = 0; i < MAX_SCHEDULES; i++)
-        {
-            schedules[i].dispensed = false;
-
-            char timeText[15];
-            char indicatorName[20];
-            formatTimeAMPM(timeText, schedules[i].hour, schedules[i].minute);
-            sprintf(indicatorName, "timeIndicator%d.txt", i + 1);
-            myNex.writeStr(indicatorName, timeText);
-            delay(50);
-        }
-        lastDay = now.Day();
-    }
-
-    for (int i = 0; i < MAX_SCHEDULES; i++)
-    {
-        if (schedules[i].enabled && !schedules[i].dispensed &&
-            now.Hour() == schedules[i].hour &&
-            now.Minute() == schedules[i].minute)
-        {
-
-            int *medicineCount = getMedicineCount(schedules[i].containerNum);
-            if (medicineCount != nullptr && *medicineCount > 0)
-            {
-                dispenseFromContainer(schedules[i].containerNum);
-                schedules[i].dispensed = true;
-
-                char indicatorName[20];
-                sprintf(indicatorName, "timeIndicator%d.txt", i + 1);
-                myNex.writeStr(indicatorName, "Dispensed");
-                delay(50);
-            }
-        }
-    }
 }
 
 int *getMedicineCount(int containerNum)
